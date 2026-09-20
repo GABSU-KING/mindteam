@@ -1,0 +1,13 @@
+node_modules/
+.next/
+out/
+build/
+
+# 환경변수 — 절대 커밋하지 말 것 (ANTHROPIC_API_KEY 포함)
+.env
+.env.local
+.env.*.local
+
+*.tsbuildinfo
+next-env.d.ts
+.DS_Store

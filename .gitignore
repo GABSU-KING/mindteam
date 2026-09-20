@@ -1,0 +1,33 @@
+# ───────────────────────────────────────────────
+# 비밀값 — 절대 커밋하지 말 것
+# ANTHROPIC_API_KEY 가 들어가는 파일들이다.
+# .env.local.example 은 플레이스홀더뿐이라 커밋한다.
+# ───────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+!.env.local.example
+
+# 의존성 / 빌드 산출물
+node_modules/
+.next/
+out/
+build/
+dist/
+*.tsbuildinfo
+next-env.d.ts
+
+# 로그
+npm-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# 에디터 / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Claude Code 로컬 설정 (권한 허용 목록 등 개인 설정)
+.claude/settings.local.json
