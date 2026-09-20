@@ -613,6 +613,325 @@ textarea {
   }
 }
 
+/* ── 예산 게이지 ─────────────────────────────
+   서버가 호출 직전에 실제로 막는 값이다. 장식이 아니다.
+   ─────────────────────────────────────────── */
+
+.budget {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.budget-label {
+  color: var(--text-faint);
+  font-size: 11px;
+  flex: none;
+}
+
+.budget-track {
+  flex: 1;
+  min-width: 60px;
+  max-width: 220px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--surface-raised);
+  overflow: hidden;
+}
+
+.budget-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: #52c4a0;
+  transition: width 0.4s ease-out, background 0.3s;
+}
+
+.budget[data-level="half"] .budget-fill {
+  background: #e8c15a;
+}
+
+.budget[data-level="low"] .budget-fill {
+  background: var(--danger);
+}
+
+.budget[data-level="out"] .budget-fill {
+  background: var(--danger);
+}
+
+.budget-text {
+  flex: none;
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.budget-text small {
+  color: var(--text-faint);
+}
+
+.budget-note {
+  color: var(--text-faint);
+  font-size: 11px;
+}
+
+.budget[data-level="out"] .budget-note,
+.budget[data-level="low"] .budget-note {
+  color: #ffb9a3;
+}
+
+/* ── 생각의 단계 ─────────────────────────────
+   내용은 모델이 만든 것이고, 한 줄씩 나타나는 건 CSS 지연이다.
+   ─────────────────────────────────────────── */
+
+.thinking-block {
+  align-self: flex-start;
+  max-width: 82%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.steps li {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  font-size: 13px;
+  line-height: 1.55;
+  padding-left: 10px;
+  border-left: 1px solid color-mix(in srgb, var(--agent-color, var(--border-strong)) 45%, transparent);
+  animation: step-in 0.3s ease-out both;
+  animation-delay: calc(var(--i, 0) * 110ms);
+}
+
+@keyframes step-in {
+  from {
+    opacity: 0;
+    transform: translateX(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.step-label {
+  flex: none;
+  color: var(--agent-color, var(--text-dim));
+  font-size: 11.5px;
+  font-weight: 600;
+  min-width: 4.5em;
+}
+
+.step-detail {
+  color: var(--text-dim);
+}
+
+.steps-live {
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--agent-color, var(--surface)) 7%, var(--surface));
+  border: 1px solid var(--border);
+  margin-left: 42px;
+}
+
+.steps-fold {
+  margin-top: 8px;
+}
+
+.steps-fold summary {
+  cursor: pointer;
+  font-size: 11.5px;
+  color: var(--text-faint);
+  padding: 2px 0;
+  list-style: none;
+  user-select: none;
+}
+
+.steps-fold summary::-webkit-details-marker {
+  display: none;
+}
+
+.steps-fold summary::before {
+  content: "▸ ";
+}
+
+.steps-fold[open] summary::before {
+  content: "▾ ";
+}
+
+.steps-fold summary:hover {
+  color: var(--text-dim);
+}
+
+.steps-fold .steps {
+  margin-top: 8px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .steps li {
+    animation: none;
+  }
+}
+
+/* ── 계속 지켜보기 토글 ─────────────────────── */
+
+.btn[data-on="true"] {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--text);
+}
+
+/* ── 자아 ───────────────────────────────────── */
+
+.portrait-input {
+  width: 100%;
+  resize: vertical;
+  min-height: 170px;
+  padding: 14px;
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  outline: none;
+  font-size: 14.5px;
+  line-height: 1.75;
+}
+
+.portrait-input:focus {
+  border-color: var(--accent);
+}
+
+.portrait-input::placeholder {
+  color: var(--text-faint);
+}
+
+.drift-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.drift-row {
+  display: flex;
+  gap: 14px;
+  align-items: baseline;
+  padding: 11px 12px;
+  border-radius: var(--radius-sm);
+  border-left: 2px solid var(--border);
+}
+
+/* 기준과 거의 같다 */
+.drift-row[data-band="same"] {
+  border-left-color: var(--border);
+}
+
+/* 조금 갈라졌다 */
+.drift-row[data-band="slight"] {
+  border-left-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  background: color-mix(in srgb, var(--accent) 4%, transparent);
+}
+
+/* 뚜렷하게 갈라졌다 — 여기가 볼 만한 지점이다 */
+.drift-row[data-band="clear"] {
+  border-left-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 9%, transparent);
+}
+
+.drift-axis {
+  flex: none;
+  width: 8.5em;
+}
+
+.drift-axis b {
+  display: block;
+  font-size: 13.5px;
+}
+
+.drift-axis small {
+  color: var(--text-faint);
+  font-size: 11px;
+  line-height: 1.4;
+  display: block;
+  margin-top: 2px;
+}
+
+.drift-text {
+  flex: 1;
+  font-size: 14px;
+  color: var(--text-dim);
+}
+
+.drift-row[data-band="clear"] .drift-text {
+  color: var(--text);
+}
+
+.drift-arrow {
+  color: var(--accent);
+  font-size: 9px;
+  margin-right: 5px;
+  vertical-align: 1px;
+}
+
+.snapshot-history {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.snapshot-history li {
+  position: relative;
+  padding: 0 0 20px 18px;
+  border-left: 1px solid var(--border);
+}
+
+.snapshot-history li:last-child {
+  border-left-color: transparent;
+  padding-bottom: 0;
+}
+
+.snapshot-history li::before {
+  content: "";
+  position: absolute;
+  left: -4px;
+  top: 6px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--surface-raised);
+  border: 1px solid var(--border-strong);
+}
+
+.snapshot-when {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-bottom: 4px;
+}
+
+.snapshot-when small {
+  color: var(--text-faint);
+}
+
+.snapshot-history p {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-dim);
+  line-height: 1.7;
+}
+
 /* ── 상담 연결 카드 ─────────────────────────── */
 
 .care {
@@ -958,5 +1277,23 @@ textarea {
   }
   .agent-pill[data-state="thinking"] .agent-pill-state {
     display: inline;
+  }
+  .budget-note {
+    display: none;
+  }
+
+  .thinking-block {
+    max-width: 92%;
+  }
+  .steps-live {
+    margin-left: 0;
+  }
+  /* 축 이름과 문장을 위아래로 쌓는다 */
+  .drift-row {
+    flex-direction: column;
+    gap: 4px;
+  }
+  .drift-axis {
+    width: auto;
   }
 }

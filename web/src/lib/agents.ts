@@ -165,7 +165,7 @@ export async function generateAgentProfile(params: {
       system_prompt?: unknown;
       color?: unknown;
       emoji?: unknown;
-    }>({ system, userContent, tool: PROFILE_TOOL, maxTokens: 1000 });
+    }>({ purpose: "profile", system, userContent, tool: PROFILE_TOOL, maxTokens: 1000 });
     raw = result.value;
     usage = result.usage;
     model = result.model;

@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { loadActiveAgents } from "@/lib/agents";
 import { fail, handleRouteError, todaySeoul, UNAUTHORIZED } from "@/lib/api";
+import { assertAffordable, BudgetExceededError, recordUsage } from "@/lib/budget-server";
+import { modelFor } from "@/lib/models";
 import { applyPersonalityNudge, nextWeight } from "@/lib/orchestrator";
 import { analyzeIntervention, blendScores, toObservation } from "@/lib/scales";
 import { requireUser } from "@/lib/supabase/server";
@@ -29,7 +31,16 @@ export async function POST(request: Request) {
       return fail("먼저 감정을 들여 주세요.");
     }
 
+    // 예산 검사를 통과하지 못하면 LLM 을 부르지 않는다.
+    const budget = await assertAffordable(supabase, "analysis", modelFor("analysis"));
+
     const analysis = await analyzeIntervention(content, active);
+    const analysisCost = await recordUsage(supabase, {
+      userId: user.id,
+      purpose: "analysis",
+      model: analysis.model,
+      usage: analysis.usage,
+    });
 
     // 1) 개입 기록 — 심리 분석의 원천 데이터
     const emotionSignals: Record<string, number> = {};
@@ -111,8 +122,15 @@ export async function POST(request: Request) {
       // 화면의 모델·토큰 표시에 쓰인다. 분석 호출 1건의 사용량이다.
       usage: analysis.usage,
       model: analysis.model,
+      budget: { ...budget, spentUsd: budget.spentUsd + analysisCost, calls: budget.calls + 1 },
     });
   } catch (error) {
+    if (error instanceof BudgetExceededError) {
+      return NextResponse.json(
+        { error: error.message, budget: error.budget, budgetExhausted: true },
+        { status: 429 },
+      );
+    }
     return handleRouteError(error);
   }
 }

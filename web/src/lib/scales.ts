@@ -202,6 +202,7 @@ export async function analyzeIntervention(
   let model = MODEL;
   try {
     const result = await callStructured<RawAnalysis>({
+      purpose: "analysis",
       system: ANALYSIS_SYSTEM,
       userContent: [`[지금 활성화된 감정들]`, roster, "", "[그 사람이 한 말]", content].join("\n"),
       tool: analysisTool(names),
@@ -398,7 +399,7 @@ export async function generateWeeklyNarrative(params: {
     trend || "(기록이 아직 적습니다)",
   ].join("\n");
 
-  const result = await callText({ system, userContent, maxTokens: 800 });
+  const result = await callText({ purpose: "summary", system, userContent, maxTokens: 800 });
   return {
     narrative: stripNumbers(result.value),
     usage: result.usage,

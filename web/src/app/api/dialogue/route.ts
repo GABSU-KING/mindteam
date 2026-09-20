@@ -1,6 +1,13 @@
 import { loadActiveAgents } from "@/lib/agents";
-import { MODEL } from "@/lib/anthropic";
 import { fail, handleRouteError, UNAUTHORIZED } from "@/lib/api";
+import { remainingUsd } from "@/lib/budget";
+import {
+  assertAffordable,
+  BudgetExceededError,
+  recordUsage,
+  wouldExceed,
+} from "@/lib/budget-server";
+import { modelFor } from "@/lib/models";
 import { buildContextLines, generateUtterance, pickSpeakers } from "@/lib/orchestrator";
 import { isRiskLevel } from "@/lib/safety";
 import { NDJSON_CONTENT_TYPE, type DialogueEvent } from "@/lib/stream";
@@ -20,11 +27,14 @@ const RISK_WINDOW_MINUTES = 15;
  * weight 를 확률로 삼아 2~4명을 뽑고, 순차적으로 발화를 생성해 agent_messages 에 insert 한다.
  * 순차인 이유: 뒤에 말하는 감정이 앞 감정의 방금 그 말을 듣고 반응해야 하기 때문.
  *
- * 응답은 NDJSON 스트림이다 — 한 라운드가 수 초 걸리므로, 누가 생각 중이고 누가 쉬는지와
- * 모델·토큰 사용량을 진행 중에 화면으로 흘려보낸다. 이벤트 정의는 `lib/stream.ts`.
+ * 예산: 라운드 시작 전에 원장을 합산해 막고, 라운드 안에서도 발화마다 남은 예산을 다시 본다.
+ * 클라이언트가 얼마나 자주 부르든 이 지점을 통과하지 못하면 LLM 은 호출되지 않는다.
+ *
+ * 응답은 NDJSON 스트림이다 — 누가 생각 중인지, 어떤 단계를 밟는지, 예산이 얼마 남았는지를
+ * 생성 중에 흘려보낸다. 이벤트 정의는 `lib/stream.ts`.
  */
 export async function POST(request: Request) {
-  // 인증과 데이터 로딩은 스트림을 열기 전에 끝낸다.
+  // 인증·예산·데이터 로딩은 스트림을 열기 전에 끝낸다.
   // 실패하면 평범한 JSON 에러로 돌려줘야 클라이언트가 구분할 수 있다.
   let prepared: {
     supabase: Awaited<ReturnType<typeof requireUser>>["supabase"];
@@ -34,6 +44,7 @@ export async function POST(request: Request) {
     context: ReturnType<typeof buildContextLines>;
     userLine?: string;
     risk: RiskLevel;
+    budget: Awaited<ReturnType<typeof assertAffordable>>;
   };
 
   try {
@@ -44,6 +55,11 @@ export async function POST(request: Request) {
       userLine?: string;
       speakerCount?: number;
     };
+    const userLine = body.userLine?.trim() || undefined;
+    const purpose = userLine ? "response" : "ambient";
+
+    // ── 예산 검사. 여기서 막히면 LLM 은 한 번도 호출되지 않는다. ──
+    const budget = await assertAffordable(supabase, purpose, modelFor(purpose));
 
     const active = await loadActiveAgents(supabase, user.id);
     if (active.length === 0) return fail("먼저 감정을 들여 주세요.");
@@ -69,14 +85,22 @@ export async function POST(request: Request) {
       active,
       speakers: pickSpeakers(active, body.speakerCount),
       context: buildContextLines(recent, agentsById),
-      userLine: body.userLine?.trim() || undefined,
+      userLine,
       risk: await latestRisk(supabase, user.id),
+      budget,
     };
   } catch (error) {
+    if (error instanceof BudgetExceededError) {
+      return Response.json(
+        { error: error.message, budget: error.budget, budgetExhausted: true },
+        { status: 429 },
+      );
+    }
     return handleRouteError(error);
   }
 
-  const { supabase, userId, active, speakers, context, userLine, risk } = prepared;
+  const { supabase, userId, active, speakers, context, userLine, risk, budget } = prepared;
+  const purpose = userLine ? "response" : "ambient";
   const startedAt = Date.now();
   const encoder = new TextEncoder();
 
@@ -87,14 +111,26 @@ export async function POST(request: Request) {
       };
 
       try {
-        send({ type: "start", model: MODEL, speakerIds: speakers.map((s) => s.id) });
+        send({ type: "start", model: modelFor(purpose), speakerIds: speakers.map((s) => s.id) });
+        send({ type: "budget", budget });
 
         let roundUsage: TokenUsage = EMPTY_USAGE;
-        let roundModel = MODEL;
+        let roundModel = modelFor(purpose);
+        let roundCost = 0;
         let spoke = 0;
         const working = [...context];
 
         for (const speaker of speakers) {
+          // 라운드 안에서도 예산을 다시 본다. 첫 발화가 예상보다 비쌌을 수 있다.
+          if (wouldExceed(budget, roundCost, purpose, roundModel)) {
+            send({
+              type: "budget_exhausted",
+              message: "이번 달 예산에 닿아서 여기서 멈췄습니다.",
+              budget: { ...budget, spentUsd: budget.spentUsd + roundCost },
+            });
+            break;
+          }
+
           send({ type: "thinking", agentId: speaker.id });
 
           let utterance;
@@ -115,6 +151,16 @@ export async function POST(request: Request) {
 
           roundUsage = addUsage(roundUsage, utterance.usage);
           roundModel = utterance.model;
+          roundCost += await recordUsage(supabase, {
+            userId,
+            purpose,
+            model: utterance.model,
+            usage: utterance.usage,
+          });
+
+          if (utterance.steps.length > 0) {
+            send({ type: "steps", agentId: speaker.id, steps: utterance.steps });
+          }
 
           if (!utterance.content) {
             send({ type: "skipped", agentId: speaker.id, reason: "빈 발화" });
@@ -128,6 +174,8 @@ export async function POST(request: Request) {
               agent_id: speaker.id,
               content: utterance.content,
               triggered_by_user: Boolean(userLine),
+              thinking_steps: utterance.steps,
+              model: utterance.model,
             })
             .select()
             .single();
@@ -152,6 +200,11 @@ export async function POST(request: Request) {
           send({ type: "error", message: "지금은 아무도 입을 열지 못했습니다." });
         }
 
+        // 원장에 막 기록한 만큼을 반영해서 내려보낸다 (재조회 없이).
+        send({
+          type: "budget",
+          budget: { ...budget, spentUsd: budget.spentUsd + roundCost, calls: budget.calls + roundUsage.calls },
+        });
         send({
           type: "done",
           usage: roundUsage,
@@ -176,6 +229,8 @@ export async function POST(request: Request) {
       "Cache-Control": "no-store, no-transform",
       // 프록시가 스트림을 버퍼링하면 실시간 표시가 의미를 잃는다.
       "X-Accel-Buffering": "no",
+      // 남은 예산을 헤더로도 알려 준다 (스트림을 읽지 않는 호출자용).
+      "X-Budget-Remaining": remainingUsd(budget).toFixed(4),
     },
   });
 }

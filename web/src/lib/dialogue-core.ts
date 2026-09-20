@@ -16,6 +16,7 @@ import {
   type Agent,
   type AgentMessage,
   type Personality,
+  type ThinkingStep,
 } from "@/lib/types";
 
 /* ───────────────────────────────────────────────
@@ -174,4 +175,28 @@ export function cleanUtterance(raw: string, speakerName: string): string {
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** 최대 몇 단계까지 생각하게 할지. 늘리면 출력 토큰이 그만큼 늘고 예산이 빨리 준다. */
+export const MAX_STEPS = 4;
+
+/** 모델이 스키마를 벗어난 값을 줘도 화면이 깨지지 않게 정리한다. */
+export function normalizeSteps(raw: unknown): ThinkingStep[] {
+  if (!Array.isArray(raw)) return [];
+
+  const steps: ThinkingStep[] = [];
+  for (const entry of raw) {
+    if (!entry || typeof entry !== "object") continue;
+    const { label, detail } = entry as { label?: unknown; detail?: unknown };
+    const trimmedLabel = typeof label === "string" ? label.trim() : "";
+    const trimmedDetail = typeof detail === "string" ? detail.trim() : "";
+    if (!trimmedLabel && !trimmedDetail) continue;
+
+    steps.push({
+      label: (trimmedLabel || "생각").slice(0, 24),
+      detail: trimmedDetail.slice(0, 400),
+    });
+    if (steps.length >= MAX_STEPS) break;
+  }
+  return steps;
 }

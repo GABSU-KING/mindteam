@@ -56,12 +56,113 @@ export type Agent = {
   updated_at: string;
 };
 
+/**
+ * 발화에 도달하기까지 감정이 밟은 한 단계.
+ * 사용자가 "AI가 생각하면서 말하는 것처럼" 보고 싶어 하는 그 과정이다.
+ */
+export type ThinkingStep = {
+  /** 단계 제목. 예: "무슨 일이 있었나" */
+  label: string;
+  /** 그 단계에서 실제로 떠올린 것. 한두 문장. */
+  detail: string;
+};
+
 export type AgentMessage = {
   id: string;
   user_id: string;
   agent_id: string;
   content: string;
   triggered_by_user: boolean;
+  thinking_steps: ThinkingStep[] | null;
+  model: string | null;
+  created_at: string;
+};
+
+/**
+ * 자아 축.
+ *
+ * 감정의 `personality`(말투 축)와는 다른 층이다 — 저건 어떻게 말하는지,
+ * 이건 자기를 어떤 사람으로 여기는지다.
+ * 기준 자아(사용자가 쓴 글)와 자라난 자아(대화에서 합성)를 같은 축으로 재서 대조한다.
+ */
+export type IdentityAxes = {
+  /** 주체성 — 내 삶을 내가 고른다는 감각 */
+  agency: number;
+  /** 관계성 — 사람들과 이어져 있다는 감각 */
+  connection: number;
+  /** 안정성 — 흔들려도 돌아올 중심이 있다는 감각 */
+  stability: number;
+  /** 개방성 — 모르는 것과 새로운 것을 향해 열린 정도 */
+  openness: number;
+  /** 자기 관용 — 스스로에게 얼마나 관대한가 */
+  selfKindness: number;
+  /** 방향성 — 어디로 가고 싶은지 아는 정도 */
+  direction: number;
+};
+
+export const IDENTITY_AXES = [
+  "agency",
+  "connection",
+  "stability",
+  "openness",
+  "selfKindness",
+  "direction",
+] as const satisfies readonly (keyof IdentityAxes)[];
+
+export const IDENTITY_AXIS_LABEL: Record<keyof IdentityAxes, string> = {
+  agency: "주체성",
+  connection: "관계성",
+  stability: "안정성",
+  openness: "개방성",
+  selfKindness: "자기 관용",
+  direction: "방향성",
+};
+
+export const IDENTITY_AXIS_HINT: Record<keyof IdentityAxes, string> = {
+  agency: "내 삶을 내가 고른다는 감각",
+  connection: "사람들과 이어져 있다는 감각",
+  stability: "흔들려도 돌아올 중심이 있다는 감각",
+  openness: "모르는 것과 새로운 것을 향해 열린 정도",
+  selfKindness: "스스로에게 얼마나 관대한가",
+  direction: "어디로 가고 싶은지 아는 정도",
+};
+
+export const NEUTRAL_IDENTITY: IdentityAxes = {
+  agency: 0.5,
+  connection: 0.5,
+  stability: 0.5,
+  openness: 0.5,
+  selfKindness: 0.5,
+  direction: 0.5,
+};
+
+export function normalizeIdentityAxes(raw: unknown): IdentityAxes {
+  const source = (raw ?? {}) as Partial<Record<keyof IdentityAxes, unknown>>;
+  const out = { ...NEUTRAL_IDENTITY };
+  for (const axis of IDENTITY_AXES) {
+    const value = source[axis];
+    if (typeof value === "number") out[axis] = clamp01(value);
+  }
+  return out;
+}
+
+export type SelfPortrait = {
+  user_id: string;
+  content: string;
+  axes: IdentityAxes | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type IdentitySnapshot = {
+  id: string;
+  user_id: string;
+  message_count: number;
+  axes: IdentityAxes;
+  summary: string;
+  /** 기준 자아와의 축별 차이 (자라난 자아 - 기준 자아). null 이면 기준이 아직 없다. */
+  drift: Partial<IdentityAxes> | null;
+  drift_note: string | null;
   created_at: string;
 };
 
@@ -108,7 +209,14 @@ export type AgentActivity = "resting" | "queued" | "thinking" | "spoke";
 
 /** 대화 화면에서 에이전트 발화와 사용자 개입을 한 줄로 합친 항목 */
 export type TimelineItem =
-  | { kind: "agent"; id: string; createdAt: string; agentId: string; content: string }
+  | {
+      kind: "agent";
+      id: string;
+      createdAt: string;
+      agentId: string;
+      content: string;
+      steps: ThinkingStep[] | null;
+    }
   | { kind: "user"; id: string; createdAt: string; content: string; risk: RiskLevel };
 
 export function clamp01(n: number): number {
