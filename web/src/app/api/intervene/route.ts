@@ -108,6 +108,9 @@ export async function POST(request: Request) {
     return NextResponse.json({
       intervention,
       risk: analysis.risk,
+      // 화면의 모델·토큰 표시에 쓰인다. 분석 호출 1건의 사용량이다.
+      usage: analysis.usage,
+      model: analysis.model,
     });
   } catch (error) {
     return handleRouteError(error);

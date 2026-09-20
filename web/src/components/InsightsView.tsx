@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { CARE_RESOURCES } from "@/lib/safety";
+import { formatTokens, normalizeUsage, totalTokens, type TokenUsage } from "@/lib/usage";
 
 export function InsightsView({
   chips,
@@ -14,6 +15,7 @@ export function InsightsView({
   interventionCount: number;
 }) {
   const [narrative, setNarrative] = useState<string | null>(null);
+  const [meta, setMeta] = useState<{ model: string; usage: TokenUsage } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -25,6 +27,10 @@ export function InsightsView({
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error ?? "요약을 만들지 못했습니다.");
       setNarrative(payload.narrative);
+      setMeta({
+        model: typeof payload.model === "string" ? payload.model : "알 수 없음",
+        usage: normalizeUsage(payload.usage),
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "요약을 만들지 못했습니다.");
     } finally {
@@ -91,15 +97,36 @@ export function InsightsView({
             )}
 
             {narrative && (
-              <button
-                type="button"
-                className="btn btn-ghost btn-sm"
-                style={{ marginTop: 14 }}
-                onClick={loadSummary}
-                disabled={busy}
-              >
-                {busy ? "다시 쓰는 중..." : "다시 쓰기"}
-              </button>
+              <>
+                {meta && meta.usage.calls > 0 && (
+                  <div className="statusbar-meters" style={{ marginTop: 16, marginLeft: 0 }}>
+                    <span className="meter" title="이 편지를 쓴 모델">
+                      <span className="meter-label">모델</span>
+                      <code>{meta.model}</code>
+                    </span>
+                    <span
+                      className="meter"
+                      title={`입력 ${meta.usage.inputTokens.toLocaleString("ko-KR")} · 캐시 읽기 ${meta.usage.cacheReadTokens.toLocaleString("ko-KR")} · 출력 ${meta.usage.outputTokens.toLocaleString("ko-KR")}`}
+                    >
+                      <span className="meter-label">토큰</span>
+                      <b>{formatTokens(totalTokens(meta.usage))}</b>
+                      <small>
+                        ↑{formatTokens(meta.usage.inputTokens + meta.usage.cacheReadTokens)} ↓
+                        {formatTokens(meta.usage.outputTokens)}
+                      </small>
+                    </span>
+                  </div>
+                )}
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  style={{ marginTop: 14 }}
+                  onClick={loadSummary}
+                  disabled={busy}
+                >
+                  {busy ? "다시 쓰는 중..." : "다시 쓰기"}
+                </button>
+              </>
             )}
           </section>
         </>

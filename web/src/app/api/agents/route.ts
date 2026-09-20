@@ -74,7 +74,11 @@ export async function POST(request: Request) {
       return fail(error.message);
     }
 
-    return NextResponse.json({ agent: data });
+    return NextResponse.json({
+      agent: data,
+      usage: profile.usage,
+      model: profile.model,
+    });
   } catch (error) {
     return handleRouteError(error);
   }

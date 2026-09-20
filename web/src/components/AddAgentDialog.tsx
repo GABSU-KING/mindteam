@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { normalizeUsage, type TokenUsage } from "@/lib/usage";
 
 const EMOJI_CHOICES = ["✨", "🌙", "🍃", "🔮", "🎈", "🕯️", "🌱", "⚡"];
 
@@ -9,7 +10,7 @@ export function AddAgentDialog({
   onCreated,
 }: {
   onClose: () => void;
-  onCreated: (name: string) => void;
+  onCreated: (name: string, meta: { model: string; usage: TokenUsage }) => void;
 }) {
   const [name, setName] = useState("");
   const [roleLine, setRoleLine] = useState("");
@@ -40,7 +41,10 @@ export function AddAgentDialog({
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error ?? "감정을 들이지 못했습니다.");
-      onCreated(name.trim());
+      onCreated(name.trim(), {
+        model: typeof payload.model === "string" ? payload.model : "알 수 없음",
+        usage: normalizeUsage(payload.usage),
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "감정을 들이지 못했습니다.");
       setBusy(false);

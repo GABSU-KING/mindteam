@@ -1,4 +1,5 @@
 import { RoomView } from "@/components/RoomView";
+import { MODEL } from "@/lib/anthropic";
 import { isRiskLevel } from "@/lib/safety";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -59,5 +60,14 @@ export default async function RoomPage() {
     })),
   ].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 
-  return <RoomView userId={userId} agents={agents} initialTimeline={timeline} />;
+  // 모델 이름은 비밀값이 아니다 — 화면에 표시하려고 서버에서 읽어 내려보낸다.
+  // API 키는 여기로 오지 않는다 (anthropic.ts 의 server-only 경계 안에 있다).
+  return (
+    <RoomView
+      userId={userId}
+      agents={agents}
+      initialTimeline={timeline}
+      initialModel={MODEL}
+    />
+  );
 }

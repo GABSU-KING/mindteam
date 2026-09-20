@@ -2,8 +2,9 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type Anthropic from "@anthropic-ai/sdk";
-import { callStructured } from "@/lib/anthropic";
+import { callStructured, MODEL } from "@/lib/anthropic";
 import { normalizePersonality, type Agent } from "@/lib/types";
+import { EMPTY_USAGE, type TokenUsage } from "@/lib/usage";
 
 /** 활성(보관되지 않은) 에이전트만, 화면 순서대로. */
 export async function loadActiveAgents(
@@ -99,6 +100,8 @@ export type AgentProfile = {
   systemPrompt: string;
   color: string;
   emoji: string;
+  usage: TokenUsage;
+  model: string;
 };
 
 const PROFILE_TOOL: Anthropic.Tool = {
@@ -155,8 +158,17 @@ export async function generateAgentProfile(params: {
     .join("\n");
 
   let raw: { system_prompt?: unknown; color?: unknown; emoji?: unknown } | null = null;
+  let usage: TokenUsage = EMPTY_USAGE;
+  let model = MODEL;
   try {
-    raw = await callStructured({ system, userContent, tool: PROFILE_TOOL, maxTokens: 1000 });
+    const result = await callStructured<{
+      system_prompt?: unknown;
+      color?: unknown;
+      emoji?: unknown;
+    }>({ system, userContent, tool: PROFILE_TOOL, maxTokens: 1000 });
+    raw = result.value;
+    usage = result.usage;
+    model = result.model;
   } catch (error) {
     console.error("generateAgentProfile failed", error);
   }
@@ -175,5 +187,5 @@ export async function generateAgentProfile(params: {
     params.emoji?.trim() ||
     (typeof raw?.emoji === "string" && raw.emoji.trim() ? [...raw.emoji.trim()][0] : "✨");
 
-  return { systemPrompt, color, emoji };
+  return { systemPrompt, color, emoji, usage, model };
 }

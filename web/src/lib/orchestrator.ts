@@ -9,6 +9,7 @@ import {
 } from "@/lib/dialogue-core";
 import { careGuidanceFor } from "@/lib/safety";
 import type { Agent, RiskLevel } from "@/lib/types";
+import type { TokenUsage } from "@/lib/usage";
 
 /** 순수 로직은 dialogue-core 에 있다. 라우트가 한 곳에서 가져다 쓰도록 여기서 다시 내보낸다. */
 export {
@@ -30,7 +31,14 @@ export type UtteranceRequest = {
   risk: RiskLevel;
 };
 
-export async function generateUtterance(req: UtteranceRequest): Promise<string> {
+export type Utterance = {
+  content: string;
+  usage: TokenUsage;
+  /** 이 발화를 실제로 만든 모델 (응답에 실린 값) */
+  model: string;
+};
+
+export async function generateUtterance(req: UtteranceRequest): Promise<Utterance> {
   const { speaker, roommates, context, userLine, risk } = req;
 
   const others = roommates
@@ -68,6 +76,10 @@ export async function generateUtterance(req: UtteranceRequest): Promise<string> 
       : `${speaker.name}으로서 이 흐름에 이어 한 마디 해라.`,
   ].join("\n");
 
-  const text = await callText({ system, userContent, maxTokens: 300 });
-  return cleanUtterance(text, speaker.name);
+  const result = await callText({ system, userContent, maxTokens: 300 });
+  return {
+    content: cleanUtterance(result.value, speaker.name),
+    usage: result.usage,
+    model: result.model,
+  };
 }

@@ -38,13 +38,17 @@ export async function POST() {
       loadActiveAgents(supabase, user.id),
     ]);
 
-    const narrative = await generateWeeklyNarrative({
+    const result = await generateWeeklyNarrative({
       days: (scoresResult.data ?? []) as MentalScore[],
       interventions: (interventionsResult.data ?? []).map((row) => row.content as string),
       agentNames: agents.map((a) => a.name),
     });
 
-    return NextResponse.json({ narrative });
+    return NextResponse.json({
+      narrative: result.narrative,
+      usage: result.usage,
+      model: result.model,
+    });
   } catch (error) {
     return handleRouteError(error);
   }

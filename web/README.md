@@ -57,7 +57,7 @@ http://localhost:3000 을 엽니다.
 |---|---|
 | `/login` | 이메일+비밀번호 · 메일 링크 (Apple 은 선택) |
 | `/agents` | 감정 목록. 들이기 / 보내기(소프트 삭제). Realtime 자동 갱신 |
-| `/room` | 감정들의 대화. 하단에서 끼어들기 |
+| `/room` | 감정들의 대화. 하단에서 끼어들기. 상단 상태 표시줄에 감정별 상태·모델·토큰 |
 | `/insights` | 문장으로 된 돌아보기와 주간 편지 |
 
 ## 서버 라우트 (Edge Function 대응)
@@ -66,7 +66,7 @@ http://localhost:3000 을 엽니다.
 |---|---|---|
 | `POST /api/agents` | `create-agent` | 이름+한 줄 역할 → LLM 이 `system_prompt`·색·이모지 생성 후 insert |
 | `POST /api/intervene` | `analyze-intervention` | 발화에서 감정 신호 추출 → `weight` 갱신, `personality` 최대 0.05 이동, 척도 누적 |
-| `POST /api/dialogue` | `generate-dialogue` | `weight` 를 확률로 2~4명 추첨 → 순차 발화 생성 → `agent_messages` insert |
+| `POST /api/dialogue` | `generate-dialogue` | `weight` 를 확률로 2~4명 추첨 → 순차 발화 생성 → `agent_messages` insert. **NDJSON 스트림**으로 진행 상황을 흘려보낸다 |
 | `POST /api/summary` | — | 주간 요약을 숫자 없이 이야기로 생성 |
 | `POST /api/agents/seed` | — | 기본 5개 복구 (가입 트리거가 안 돈 계정용) |
 
@@ -83,6 +83,27 @@ http://localhost:3000 을 엽니다.
 5. **숫자 노출 금지** — `mental_scores` 의 값은 서버에서 `describeDimension()` 으로
    문장으로 바꾼 뒤에야 브라우저로 내려갑니다. 원본 숫자는 클라이언트에 도달하지 않습니다.
    `stripNumbers()` 가 LLM 이 흘린 점수 표현도 한 번 더 걷어냅니다.
+
+## 상태 · 모델 · 토큰 표시
+
+대화 화면 상단의 상태 표시줄이 세 가지를 보여 줍니다.
+
+**감정별 상태.** 한 라운드 동안 각 감정은 네 상태를 지납니다 — `쉬는 중`(이번에 안 뽑힘),
+`차례 기다림`(뽑혔지만 아직), `생각 중`(지금 생성 중, 자기 색으로 빛남), `말했어요`(끝냄).
+라운드가 끝나도 마지막 상태가 남아 있어 누가 말하고 누가 쉬었는지 보입니다.
+
+**모델.** `ANTHROPIC_MODEL` 값이 아니라 API 응답에 실려 온 실제 모델명을 표시합니다.
+
+**토큰.** `이번`은 이 라운드 누적(개입 분석 1회 + 발화 생성 2~4회), `누적`은 이 브라우저
+세션 전체입니다. 발화가 하나씩 완성될 때마다 올라갑니다. 칩에 마우스를 올리면 입력·캐시
+읽기·출력이 나뉘어 보입니다.
+
+이게 가능한 이유는 `/api/dialogue` 가 JSON 한 덩어리가 아니라 NDJSON 스트림이기 때문입니다.
+한 라운드는 LLM 을 2~4번 순차로 부르므로 수 초가 걸리는데, 그동안 진행 상황이 실시간으로
+넘어옵니다. 이벤트 정의와 파서는 [`src/lib/stream.ts`](src/lib/stream.ts) 에 있습니다.
+
+토큰 사용량은 DB 에 저장하지 않습니다 — 스키마를 건드리지 않으려고 세션 메모리에만 둡니다.
+새로고침하면 `누적`이 0으로 돌아갑니다.
 
 ## 알아 둘 것
 

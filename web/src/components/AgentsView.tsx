@@ -10,6 +10,7 @@ import {
   normalizePersonality,
   type Agent,
 } from "@/lib/types";
+import { formatTokens, totalTokens } from "@/lib/usage";
 
 export function AgentsView({
   initialAgents,
@@ -167,9 +168,13 @@ export function AgentsView({
       {dialogOpen && (
         <AddAgentDialog
           onClose={() => setDialogOpen(false)}
-          onCreated={(name) => {
+          onCreated={(name, meta) => {
             setDialogOpen(false);
-            show(`${name}이(가) 합류했습니다.`);
+            show(
+              meta.usage.calls > 0
+                ? `${name}이(가) 합류했습니다 · ${meta.model} · ${formatTokens(totalTokens(meta.usage))} 토큰`
+                : `${name}이(가) 합류했습니다.`,
+            );
             void reload();
           }}
         />

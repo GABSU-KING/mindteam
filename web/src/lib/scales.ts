@@ -1,9 +1,10 @@
 import "server-only";
 
 import type Anthropic from "@anthropic-ai/sdk";
-import { callStructured, callText } from "@/lib/anthropic";
+import { callStructured, callText, MODEL } from "@/lib/anthropic";
 import { isRiskLevel, mergeRisk, screenText } from "@/lib/safety";
 import { clamp01, type Agent, type MentalScore, type Personality, type RiskLevel, type ScaleMapping } from "@/lib/types";
+import { EMPTY_USAGE, type TokenUsage } from "@/lib/usage";
 
 /* ───────────────────────────────────────────────
  * 척도 문항 (프롬프트에 그대로 들어간다)
@@ -54,6 +55,8 @@ export type InterventionAnalysis = {
   scales: ScaleMapping;
   risk: RiskLevel;
   dayNote: string;
+  usage: TokenUsage;
+  model: string;
 };
 
 type RawAnalysis = {
@@ -195,13 +198,18 @@ export async function analyzeIntervention(
     .join("\n");
 
   let raw: RawAnalysis | null = null;
+  let usage: TokenUsage = EMPTY_USAGE;
+  let model = MODEL;
   try {
-    raw = await callStructured<RawAnalysis>({
+    const result = await callStructured<RawAnalysis>({
       system: ANALYSIS_SYSTEM,
       userContent: [`[지금 활성화된 감정들]`, roster, "", "[그 사람이 한 말]", content].join("\n"),
       tool: analysisTool(names),
       maxTokens: 2000,
     });
+    raw = result.value;
+    usage = result.usage;
+    model = result.model;
   } catch (error) {
     // 분석이 실패해도 대화는 이어져야 한다. 키워드 안전망만 남기고 중립으로 간다.
     console.error("analyzeIntervention failed", error);
@@ -242,6 +250,8 @@ export async function analyzeIntervention(
     scales: { phq9, gad7, perma, risk },
     risk,
     dayNote,
+    usage,
+    model,
   };
 }
 
@@ -331,16 +341,27 @@ export const DIMENSION_LABELS: Record<
   social: "사람과의 거리",
 };
 
+export type WeeklyNarrative = {
+  narrative: string;
+  usage: TokenUsage;
+  model: string;
+};
+
 /** 주간 요약 — 숫자 없이 이야기로만. */
 export async function generateWeeklyNarrative(params: {
   days: MentalScore[];
   interventions: string[];
   agentNames: string[];
-}): Promise<string> {
+}): Promise<WeeklyNarrative> {
   const { days, interventions, agentNames } = params;
 
   if (interventions.length === 0) {
-    return "이번 주에는 아직 남겨 주신 말이 없어요. 감정들이 대화하는 걸 지켜보다가 하고 싶은 말이 생기면 언제든 끼어들어 주세요.";
+    return {
+      narrative:
+        "이번 주에는 아직 남겨 주신 말이 없어요. 감정들이 대화하는 걸 지켜보다가 하고 싶은 말이 생기면 언제든 끼어들어 주세요.",
+      usage: EMPTY_USAGE,
+      model: MODEL,
+    };
   }
 
   // 모델에게도 숫자를 넘기지 않는다. 내부 값은 단어로 바꿔서 전달한다.
@@ -377,8 +398,12 @@ export async function generateWeeklyNarrative(params: {
     trend || "(기록이 아직 적습니다)",
   ].join("\n");
 
-  const text = await callText({ system, userContent, maxTokens: 800 });
-  return stripNumbers(text);
+  const result = await callText({ system, userContent, maxTokens: 800 });
+  return {
+    narrative: stripNumbers(result.value),
+    usage: result.usage,
+    model: result.model,
+  };
 }
 
 /* ───────────────────────────────────────────────

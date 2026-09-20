@@ -97,6 +97,15 @@ export type MentalScore = {
   note: string | null;
 };
 
+/**
+ * 대화 한 라운드 동안 각 감정이 어떤 상태인지.
+ * - resting: 이번 라운드에 뽑히지 않았다. 쉬고 있다.
+ * - queued:  뽑혔지만 아직 자기 차례가 아니다.
+ * - thinking: 지금 말을 고르고 있다.
+ * - spoke:   이번 라운드에 말을 끝냈다.
+ */
+export type AgentActivity = "resting" | "queued" | "thinking" | "spoke";
+
 /** 대화 화면에서 에이전트 발화와 사용자 개입을 한 줄로 합친 항목 */
 export type TimelineItem =
   | { kind: "agent"; id: string; createdAt: string; agentId: string; content: string }
